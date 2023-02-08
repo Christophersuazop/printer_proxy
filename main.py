@@ -1,9 +1,11 @@
 from flask import Flask, request, jsonify, make_response
+from flask_cors import CORS
 import re
 from escpos.printer import Network
 import base64
 
 app = Flask(__name__)
+CORS(app)
 
 
 @app.route('/text/<addr>', methods=['GET','POST'])
@@ -13,7 +15,7 @@ def print_text(addr):
         return message
     printer.text(data)
     cut(printer=printer)
-    return _corsify_actual_response(jsonify(message="Success!", code=200))
+    return jsonify(message="Success!", code=200)
 
 @app.route('/block/<addr>', methods=['GET','POST'])
 def print_block(addr):
@@ -22,7 +24,7 @@ def print_block(addr):
         return message
     printer.block_text(data)
     cut(printer=printer)
-    return _corsify_actual_response(jsonify(message="Success!", code=200))
+    return jsonify(message="Success!", code=200)
 
 @app.route('/img/<addr>', methods=['GET','POST'])
 def print_img(addr):
@@ -31,7 +33,7 @@ def print_img(addr):
         return message
     printer.image(data)
     cut(printer=printer)
-    return _corsify_actual_response(jsonify(message="Success!", code=200))
+    return jsonify(message="Success!", code=200)
 
 @app.route('/cut/<addr>', methods=['GET','POST'])
 def print_cut(addr):
@@ -42,56 +44,41 @@ def cut(printer=False, addr=False, request=False):
         return printer.cut()
     data, printer, message = setup_for_command(request, addr)
     printer.cut()
-    return _corsify_actual_response(jsonify(message="Success!", code=200))
+    return jsonify(message="Success!", code=200)
     
 
 def setup_for_command(request, addr, data_type="txt"):
-    if request.method == "OPTIONS":
-        return _build_cors_preflight_response()
-    app.logger.info(validate_address(addr))
     if not validate_address(addr):
-        return False, False, _corsify_actual_response(jsonify(message="Not a valid url or ip address.", code=406))
+        return False, False, jsonify(message="Not a valid url or ip address.", code=406)
 
     if request.method != 'POST':
-        return False, False, _corsify_actual_response(jsonify(message="This should be used with post method.", code=405))
+        return False, False, jsonify(message="This should be used with post method.", code=405)
 
     data = get_data(request.data, data_type)
     printer = create_network(addr)
 
     if not printer:
-        return False, False, _corsify_actual_response(jsonify(message="Error ocurred", code=504))
-
+        return False, False, jsonify(message="Error ocurred", code=504)
+    app.logger.info(data or "no data")
     if printer and not data:
         try:
             printer.cut()
         except:
-            return False, False, _corsify_actual_response(jsonify(message="No connection could be made to the address.", code=406))
+            return False, False, jsonify(message="No connection could be made to the address.", code=406)
         
-        return False, False, _corsify_actual_response(jsonify(message="Printer found on ip: %s" % addr, code=202))
+        return False, False, jsonify(message="Printer found on ip: %s" % addr, code=202)
     
     return data, printer, False
-
-def _build_cors_preflight_response():
-    response = make_response()
-    response.headers.add("Access-Control-Allow-Origin", "localhost")
-    response.headers.add('Access-Control-Allow-Headers', "localhost")
-    response.headers.add('Access-Control-Allow-Methods', "localhost")
-    return response
-
-def _corsify_actual_response(response):
-    response.headers.add("Access-Control-Allow-Origin", "localhost")
-    response.headers.add('Access-Control-Allow-Headers', "localhost")
-    response.headers.add('Access-Control-Allow-Methods', "localhost")
-    return response
 
 def get_data(data, data_type):
     try:
         if data_type == "txt":
             return str(data.decode('utf-8'))
-        data = data.replace(' ', "+")
+        app.logger.info(data)
         imgdata = base64.b64decode(data)
         filename = "temp_receipt.jpg"
         with open(filename, 'wb') as f:
+            app.logger.info(filename)
             f.write(imgdata)
         return filename
     except:
@@ -115,4 +102,4 @@ def validate_address(addr):
     return re.match(regex, addr)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host="0.0.0.0")

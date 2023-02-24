@@ -35,7 +35,15 @@ def print_img(addr):
     cut(printer=printer)
     return jsonify(message="Success!", code=200)
 
-@app.route('/cut/<addr>', methods=['GET','POST'])
+@app.route('/status/<addr>', methods=['GET'])
+def print_status(addr):
+    try:
+        cut(addr=addr, request=request)
+        return jsonify(message="Success!", code=200)
+    except:
+        return jsonify(message="Error!", code=500)
+
+@app.route('/cut/<addr>', methods=['GET'])
 def print_cut(addr):
     return cut(addr=addr, request=request)
 
@@ -46,13 +54,19 @@ def cut(printer=False, addr=False, request=False):
     printer.cut()
     return jsonify(message="Success!", code=200)
     
+def setup_for_post_command(request, addr, data_type="txt"):
+    if request.method != 'POST':
+        return False, False, jsonify(message="This should be used with POST method.", code=405)
+    return setup_for_command(request, addr, data_type)
+
+def setup_for_post_command(request, addr, data_type="txt"):
+    if request.method != 'GET':
+        return False, False, jsonify(message="This should be used with GET method.", code=405)
+    return setup_for_command(request, addr, data_type)
 
 def setup_for_command(request, addr, data_type="txt"):
     if not validate_address(addr):
         return False, False, jsonify(message="Not a valid url or ip address.", code=406)
-
-    if request.method != 'POST':
-        return False, False, jsonify(message="This should be used with post method.", code=405)
 
     data = get_data(request.data, data_type)
     printer = create_network(addr)
